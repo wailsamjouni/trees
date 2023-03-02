@@ -1,0 +1,190 @@
+from GraphStructure import GraphStructure
+from Build import Build
+from typing import List
+import networkx as nx
+import matplotlib.pyplot as plt
+from collections import Counter
+import copy
+import time
+import timeit
+import pandas as pd
+import random
+
+
+class Overload:
+    def __init__(self, node):
+        #
+        self.node = node
+
+    def path_to_edges(self, path):
+        edges = []
+        for i in range(len(path)-1):
+            edge = (path[i], path[i+1])
+            edges.append(edge)
+        return edges
+
+    def get_just_paths(self, paths):
+        # result = [path[2]
+        #           for path in paths if path is not None and path[2] is not None]
+        result = [path[2] for path in paths if path[1] is True]
+
+        return result
+
+    def resign_graph(self):
+
+        g_copy = copy.deepcopy(self.graph)
+        for structure in self.results:
+            structure.graph.graph = g_copy
+
+    def compute_paths(self, erdos, fraction, version):
+
+        # dest_nodes = random.sample(list(erdos.nodes()), 1)
+        # destination = dest_nodes[0]
+        # random_nodes = random.sample(list(erdos.nodes()), 4)
+
+        # if destination in random_nodes:
+        #     random_nodes.remove(destination)
+
+        paths = []
+        for node in random_nodes:
+
+            g_copy = copy.deepcopy(erdos)
+            graph_structure = GraphStructure(
+                g_copy, node, destination)
+            graph = Build(graph_structure)
+
+            path = graph.build(fraction, version)
+            paths.append(path)
+
+        computed_paths = self.get_just_paths(paths)
+        paths_edges = []
+
+        for path in computed_paths:
+            paths_edges.append(self.path_to_edges(path))
+
+        return paths_edges
+
+    def model_versions(self, fraction):
+
+        edp_start = time.time()
+        using_edps = self.compute_paths(fraction, version="edps")
+        edp_end = time.time()
+        edp = edp_end - edp_start
+
+        one_start = time.time()
+        using_one_tree = self.compute_paths(fraction, version="onetree")
+        one_end = time.time()
+        one = one_end - one_start
+
+        multi_start = time.time()
+        using_multiple_tree = self.compute_paths(fraction, version="multitree")
+        multi_end = time.time()
+        multi = multi_end - multi_start
+
+        print(f'paths using edps: {using_edps} and time complexity is: {edp}')
+        print(
+            f'paths using one tree: {using_one_tree} and time complexity is: {one}')
+        print(
+            f'paths using multiple tree: {using_multiple_tree} and time complexity is: {multi}')
+
+        return using_edps, using_one_tree, using_multiple_tree
+
+    def load_versions(self, paths):
+
+        if paths is not None and len(paths) > 0:
+            all_edges = [frozenset(edge) for path in paths for edge in path]
+
+            counter = Counter(all_edges)
+            most_common = [tuple(edge) for edge, count in counter.most_common(
+            ) if count == counter.most_common(1)[0][1]]
+
+            edge_load = counter.most_common(1)[0][1]
+
+            return most_common, edge_load
+
+    def load_all_versions(self, paths):
+
+        results = []
+        i = 0
+
+        for path_list in paths:
+            result = self.load_versions(path_list)
+            results.append(result)
+            print(f'Result number {i+1} : {result}')
+            i += 1
+
+        return results
+
+    def time_complexity(self, fraction):
+
+        edp_start = time.time()
+        using_edps = self.compute_paths(fraction, version="edps")
+        edp_end = time.time()
+        edp = edp_end - edp_start
+
+        one_start = time.time()
+        using_one_tree = self.compute_paths(fraction, version="onetree")
+        one_end = time.time()
+        one = one_end - one_start
+
+        multi_start = time.time()
+        using_multiple_tree = self.compute_paths(fraction, version="multitree")
+        multi_end = time.time()
+        multi = multi_end - multi_start
+
+        return edp, one, multi
+
+    def plot_complexity(self, complexities):
+
+        edp, one, multi = self.time_complexity(complexities, fraction=0.4)
+
+        plt.plot(edp, label="edp")
+        plt.plot(one, label="one tree")
+        plt.plot(multi, label="multi tree")
+
+        plt.xlabel("Time complexity")
+        plt.ylabel("Time(s)")
+        plt.legend()
+        plt.show()
+
+    def model(self, sizes, fraction):
+
+        generated_graph = nx.gnp_random_graph(number_nodes, 0.4)
+        dest_nodes = random.sample(list(generated_graph.nodes()), 1)
+        destination = dest_nodes[0]
+        random_nodes = random.sample(list(generated_graph.nodes()), 4)
+
+        if destination in random_nodes:
+            random_nodes.remove(destination)
+
+        edp_times = []
+        one_times = []
+        multi_times = []
+
+        for number_nodes in sizes:
+            random_graph = nx.gnp_random_graph(number_nodes, 0.4)
+            edp_times.append(timeit.timeit(
+                lambda: self.compute_paths(random_graph, fraction, version="edps"), number=2))
+
+            one_times.append(timeit.timeit(
+                lambda: self.compute_paths(random_graph, fraction, version="onetree"), number=2))
+
+            multi_times.append(timeit.timeit(
+                lambda: self.compute_paths(random_graph, fraction, version="multitree"), number=2))
+
+        df = pd.DataFrame({
+            "Sizes": sizes,
+            "Edps": edp_times,
+            "One Tree": one_times,
+            "Multiple Trees": multi_times
+        })
+
+        plt.plot(df['Sizes'], df['Edps'], label='Edps')
+        plt.plot(df['Sizes'], df['One Tree'], label='One Tree')
+        plt.plot(df['Sizes'], df['Multiple Trees'], label='Multiple Trees')
+
+        plt.xlabel('Number of nodes')
+        plt.ylabel('Complexity')
+        plt.legend()
+
+        plt.show()
